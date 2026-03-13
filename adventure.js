@@ -140,7 +140,34 @@ class Adventure {
   }
 
   drawEvent() {
-    const eligible = this.event_pool.filter(e => {
+    const eligible = this._eligibleEvents();
+    if (!eligible.length) return null;
+    const ev = eligible[Math.floor(Math.random() * eligible.length)];
+    if (!ev.repeatable) this.removeFromPool(ev.id);
+    return ev;
+  }
+
+  drawTwoEvents() {
+    // Returns up to 2 distinct eligible events (does NOT remove from pool yet)
+    const eligible = this._eligibleEvents();
+    if (!eligible.length) return [];
+    if (eligible.length === 1) return [eligible[0]];
+    const idx1 = Math.floor(Math.random() * eligible.length);
+    let idx2;
+    do { idx2 = Math.floor(Math.random() * eligible.length); } while (idx2 === idx1);
+    return [eligible[idx1], eligible[idx2]];
+  }
+
+  commitEvent(event) {
+    // Call after player picks an event from drawTwoEvents
+    this.event_history.push(event.id);
+    if (!event.repeatable) this.removeFromPool(event.id);
+    this.current_event = event;
+    if (event.intro_effects) this.applyEffects(event.intro_effects);
+  }
+
+  _eligibleEvents() {
+    return this.event_pool.filter(e => {
       if (e.conditions) {
         if (e.conditions.min_day && this.day < e.conditions.min_day) return false;
         if (e.conditions.require_events && !e.conditions.require_events.every(id => this.event_history.includes(id))) return false;
@@ -150,10 +177,6 @@ class Adventure {
       }
       return true;
     });
-    if (!eligible.length) return null;
-    const ev = eligible[Math.floor(Math.random() * eligible.length)];
-    if (!ev.repeatable) this.removeFromPool(ev.id);
-    return ev;
   }
 
   // ── Dice ────────────────────────────────────────────────────
@@ -227,24 +250,79 @@ class Adventure {
     this.log.push('【物资】丢弃了一件物品');
   }
 
-  // ── Daily consume ────────────────────────────────────────────
-  dailyConsume() {
-    const deaths = [];
-    for (const a of this.aliveAdventurers()) {
-      a.hp = Math.max(0, a.hp - 1);
-      // starvation / exhaustion: hp reaches 0 → die
-      if (a.hp <= 0 && a.hpMax() <= 0) {
-        // injury >= sta: certain death (handled in woundRolls pre-check)
+  // ── End-of-day resolution (auto eat → auto drug → consume → wound rolls) ─
+  endOfDay() {
+    const log = [];
+
+    // 1. Auto-eat: sort alive by (str+sta) descending, feed until food runs out
+    const eaters = this.adventurers
+      .filter(a => a.isAlive() && a.hp < a.hpMax())
+      .sort((a, b) => {
+        const scoreB = (b.attrs.str || 0) + b.sta;
+        const scoreA = (a.attrs.str || 0) + a.sta;
+        return scoreB - scoreA;
+      });
+
+    for (const a of eaters) {
+      const food = this.items.find(i => i.isFood());
+      if (!food || food.quantity <= 0) break;
+      const hp_per = food.props['hp回复量'] || 1;
+      const heal = Math.min(hp_per, a.hpMax() - a.hp);
+      if (heal > 0) {
+        a.hp += heal;
+        food.quantity--;
+        if (food.quantity <= 0) this.items = this.items.filter(i => !i.isFood());
+        log.push({ type:'food', name: a.name, heal });
+        this.log.push('【进食】' + a.name + ' 进食，恢复 ' + heal + ' 体力');
       }
+    }
+
+    // 2. Auto-drug: one herb per injured adventurer, most injured first
+    const injuredForDrug = this.adventurers
+      .filter(a => a.isAlive() && a.injury > 0)
+      .sort((a, b) => b.injury - a.injury);
+
+    for (const a of injuredForDrug) {
+      const drug = this.items.find(i => i.isDrug() && i.quantity > 0);
+      if (!drug) break;
+      const oldInjury = a.injury;
+      a.injury = Math.max(0, a.injury - 1);
+      a.clampHp();
+      drug.quantity--;
+      if (drug.quantity <= 0) this.items = this.items.filter(i => i.id !== drug.id);
+      log.push({ type:'drug', name: a.name, oldInjury, newInjury: a.injury });
+      this.log.push('【医疗】' + a.name + ' 服药，伤势减轻（' + oldInjury + '→' + a.injury + '）');
+    }
+
+    // 3. Daily hp consumption — snapshot list first to avoid mid-loop mutation
+    const aliveSnapshot = [...this.adventurers.filter(a => a.isAlive())];
+    const starvationDeaths = [];
+    for (const a of aliveSnapshot) {
+      a.hp = Math.max(0, a.hp - 1);
       if (a.hp <= 0) {
         a.status = STATUS.DEAD;
-        deaths.push(a);
+        starvationDeaths.push(a);
         this.log.push('【力竭】' + a.name + ' 体力耗尽，倒在了路上');
-        this.handleDeath(a);
       }
     }
     this.log.push('【消耗】每人消耗1体力');
-    return deaths;
+
+    // Process starvation deaths AFTER all hp has been deducted,
+    // so harosCorpseCook() can still find 陶范 if he survived
+    for (const a of starvationDeaths) {
+      this.handleDeath(a);
+    }
+
+    // 4. Wound rolls for remaining injured
+    const woundResults = this.woundRolls();
+
+    return { log, starvationDeaths, woundResults };
+  }
+
+  // ── Daily consume (kept for compatibility, delegates to endOfDay) ─────────
+  dailyConsume() {
+    // no-op: endOfDay() handles everything now
+    return [];
   }
 
   // ── Wound rolls ──────────────────────────────────────────────
@@ -578,7 +656,7 @@ const DEMO_EVENTS = [
     id:'ambush', name:'伏击', repeatable:true,
     intro:'林中突然杀出一队盗匪，为首者手持铜钺，眼神凶狠。队伍被前后夹击，无处可退。',
     checks:[{
-      label:'武力对决', stat:'str', difficulty:7,
+      label:'武力对决', stat:'str', difficulty:16,
       success_text:'血战之后，盗匪溃散。地上横七竖八躺着几具尸体。',
       failure_text:'抵挡不住，队伍被迫分散突围，狼狈撤退。',
       success_effects:[
@@ -595,7 +673,7 @@ const DEMO_EVENTS = [
     id:'beast', name:'猛兽出没', repeatable:true,
     intro:'夜营时，营地边缘传来沉重的喘息声。篝火映出一双黄色的眼睛——是饥饿的豺狼，不止一头。',
     checks:[{
-      label:'驱兽（武）', stat:'str', difficulty:6,
+      label:'驱兽（武）', stat:'str', difficulty:14,
       success_text:'举火呐喊，兽群被驱散，只留下一地爪印。',
       failure_text:'豺狼冲入营地，撕咬人员，抢走了食物。',
       success_effects:[],
@@ -611,13 +689,13 @@ const DEMO_EVENTS = [
     intro:'发现了野猪的踪迹，蹄印新鲜，数量不少。若能猎获，可解燃眉之急。',
     checks:[
       {
-        label:'追踪猎物（智）', stat:'int', difficulty:4,
+        label:'追踪猎物（智）', stat:'int', difficulty:10,
         success_text:'悄悄接近，猎物尚未察觉。',
         failure_text:'踪迹断了，猎物早已惊走。',
         success_effects:[], failure_effects:[], fail_ends_event:true,
       },
       {
-        label:'制服野猪（武）', stat:'str', difficulty:6,
+        label:'制服野猪（武）', stat:'str', difficulty:14,
         success_text:'两头野猪被猎获，众人大快朵颐。',
         failure_text:'野猪受伤逃脱，追击途中有人被獠牙划伤。',
         success_effects:[{ type:'party_stat', stat:'food', delta:6 }],
@@ -630,7 +708,7 @@ const DEMO_EVENTS = [
     id:'forage', name:'采集野果', repeatable:true,
     intro:'路旁山坡上长着大片不知名的浆果，颜色鲜艳，不知是否可食。',
     checks:[{
-      label:'辨别毒性（智）', stat:'int', difficulty:3,
+      label:'辨别毒性（智）', stat:'int', difficulty:9,
       success_text:'认出了可食的品种，采摘了不少。',
       failure_text:'分辨不清，有人忍不住尝了颜色好看的……',
       success_effects:[{ type:'party_stat', stat:'food', delta:3 }],
@@ -645,12 +723,12 @@ const DEMO_EVENTS = [
     id:'mudslide', name:'山体滑坡', repeatable:false,
     intro:'连日阴雨，山道突然传来轰鸣，泥石俱下，前路被堵死。',
     checks:[{
-      label:'强行开路（武）', stat:'str', difficulty:8,
+      label:'强行开路（武）', stat:'str', difficulty:18,
       success_text:'众人合力，搬开巨石，勉强打通了一条缝隙。',
       failure_text:'力气耗尽，只能绕道，多走了半天，粮食消耗倍增。',
       success_effects:[],
       failure_effects:[
-        { type:'party_stat', stat:'food', delta:-5 },
+        { type:'party_stat', stat:'food', delta:-6 },
         { type:'char_hp', target:'all_alive', delta:-1 },
       ],
     }],
@@ -660,7 +738,7 @@ const DEMO_EVENTS = [
     id:'plague', name:'疫病蔓延', repeatable:false,
     intro:'夜里有人突发高热，口吐黑水，营地中弥漫着腐败的气息。到早晨，已有几人神色不对。',
     checks:[{
-      label:'隔离处置（智）', stat:'int', difficulty:5,
+      label:'隔离处置（智）', stat:'int', difficulty:12,
       success_text:'迅速隔离病患，烧掉污染的器具，疫情得到控制。',
       failure_text:'处置迟缓，疫病在队伍中迅速扩散，人人自危。',
       success_effects:[],
@@ -675,7 +753,7 @@ const DEMO_EVENTS = [
     id:'lost', name:'迷路', repeatable:true,
     intro:'雾气弥漫，向导也辨不清方向，队伍在山间转了大半天，原地打转。',
     checks:[{
-      label:'辨别方向（智）', stat:'int', difficulty:5,
+      label:'辨别方向（智）', stat:'int', difficulty:11,
       success_text:'终于找到了参照物，重新确认方向，虽然耗费时间，但没有更大损失。',
       failure_text:'越走越深，有人在混乱中与大队失散。',
       success_effects:[{ type:'char_hp', target:'all_alive', delta:-1 }],
@@ -690,7 +768,7 @@ const DEMO_EVENTS = [
     id:'river_crossing', name:'渡河', repeatable:false,
     intro:'前方一条湍急的河流拦住去路。水面宽阔，水色浑浊，看不清深浅，河边没有舟筏。',
     checks:[{
-      label:'强渡（武）', stat:'str', difficulty:7,
+      label:'强渡（武）', stat:'str', difficulty:17,
       success_text:'众人手拉手，在激流中站稳脚跟，全员艰难渡过。',
       failure_text:'水流太急，有人被冲走，物资也损失大半。',
       success_effects:[],
@@ -705,7 +783,7 @@ const DEMO_EVENTS = [
     id:'night_raid', name:'夜袭营地', repeatable:true,
     intro:'夜深人静，哨兵突然大喊——黑暗中不知多少人影正在逼近，是有备而来的袭击。',
     checks:[{
-      label:'抵御夜袭（武）', stat:'str', difficulty:8,
+      label:'抵御夜袭（武）', stat:'str', difficulty:18,
       success_text:'在混乱中组织起防线，击退了来袭之敌，天明时才看清地上的血迹有多深。',
       failure_text:'营地被冲散，伤亡惨重，物资被劫走大半。',
       success_effects:[],
@@ -720,7 +798,7 @@ const DEMO_EVENTS = [
     id:'find_missing', name:'搜寻失踪者', repeatable:false,
     intro:'有人提议停下来找找失踪的同伴，说不定还没走远。',
     checks:[{
-      label:'搜寻（智）', stat:'int', difficulty:4,
+      label:'搜寻（智）', stat:'int', difficulty:9,
       success_text:'在密林深处找到了失踪者，形容狼狈，但还活着。',
       failure_text:'搜遍附近，毫无踪影，也许已经凶多吉少。',
       success_effects:[{ type:'add_event', event_id:'rescue_success' }],
@@ -739,7 +817,7 @@ const DEMO_EVENTS = [
     id:'merchant', name:'行商', repeatable:false,
     intro:'山道上遇到一支落魄的商队，车轮陷在泥里，他们愿意以物资换取帮助。',
     checks:[{
-      label:'帮助商队脱困（武）', stat:'str', difficulty:4,
+      label:'帮助商队脱困（武）', stat:'str', difficulty:12,
       success_text:'合力将车推出泥坑，商人千恩万谢，拿出了不少物资相赠。',
       failure_text:'人手不够，推不动，商人只给了些零散物资表示谢意。',
       success_effects:[], failure_effects:[],

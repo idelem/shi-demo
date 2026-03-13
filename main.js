@@ -66,12 +66,14 @@ function renderParty() {
       : '';
 
     card.innerHTML = `
-      <div class="char-name">${statusLabel}${a.name}</div>
+      <div class="char-top-row">
+        <span class="char-name">${statusLabel}${a.name}</span>
+        <span class="char-hp-text">HP ${a.hp}/${hpMax}${a.injury > 0 ? `　伤${a.injury}` : ''}</span>
+      </div>
       <div class="char-hp-bar">
         <div class="char-hp-fill" style="width:${hpPct}%;background:${hpColor}"></div>
         ${a.injury > 0 ? `<div class="char-injury-fill" style="width:${(a.injury/a.sta)*100}%"></div>` : ''}
       </div>
-      <div class="char-hp-text">HP ${a.hp}/${hpMax}${a.injury > 0 ? `　伤${a.injury}` : ''}</div>
       ${attrs ? `<div class="char-attrs">${attrs}</div>` : ''}
       ${a.skill ? `<div class="char-skill">◆ ${a.skill}</div>` : ''}
     `;
@@ -93,7 +95,6 @@ function renderItems() {
       <span class="item-qty">×${item.quantity}</span>
       ${bonuses ? `<span class="item-bonus">${bonuses}</span>` : ''}
       <div class="item-actions">
-        ${item.consumable ? `<button class="btn-small btn-use" onclick="handleUseItem('${item.id}')">用</button>` : ''}
         <button class="btn-small btn-drop" onclick="handleDropItem('${item.id}')">丢</button>
       </div>
     `;
@@ -154,38 +155,69 @@ function startDay() {
   eventCheckResults = [];
   pendingOutcomeEffects = null;
 
-  if (adv.day > adv.days_max) {
-    showEnd();
-    return;
-  }
+  if (adv.day > adv.days_max) { showEnd(); return; }
 
   adv.log.push(`\n── 第 ${adv.day} 日 ──`);
 
-  const event = adv.drawEvent();
-  if (!event) {
+  const two = adv.drawTwoEvents();
+  if (!two.length) {
     addLog('【事件】无可用事件，平安度过。');
     showConsumePhase();
     return;
   }
+  if (two.length === 1) {
+    pickEvent(two[0]);
+    return;
+  }
+  showEventChoice(two[0], two[1]);
+}
 
-  adv.current_event = event;
-  adv.event_history.push(event.id);
+function showEventChoice(ev1, ev2) {
+  adv.phase = PHASE.EVENT_INTRO;
+  const partyStat = `武力 ${adv.getPartyStat('str')}　智力 ${adv.getPartyStat('int')}`;
 
-  // apply intro effects if any
-  if (event.intro_effects) {
-    adv.applyEffects(event.intro_effects);
-    renderAll();
+  function cardHtml(ev, idx) {
+    const checkLabels = (ev.checks||[]).map(c =>
+      `<span class="choice-check-label">${c.label}</span>`
+    ).join('');
+    const tag = ev.loot ? '【物资】' : ev.recruit ? '【遭遇】' : ev.checks?.length ? '' : '【无检定】';
+    return `
+      <div class="event-choice-card" onclick="pickEvent(window._choiceEvents[${idx}])">
+        <div class="choice-tag">${tag}</div>
+        <div class="choice-event-name">◈ ${ev.name}</div>
+        <div class="choice-event-intro">${ev.intro}</div>
+        ${checkLabels ? `<div class="choice-checks">${checkLabels}</div>` : ''}
+        <button class="btn-choice">选择此事件 →</button>
+      </div>`;
   }
 
-  // handle different event types
+  window._choiceEvents = [ev1, ev2];
+
+  setMain(`
+    <div class="phase-box">
+      <div class="day-badge">第 ${adv.day} 日</div>
+      <div class="party-stats-bar" style="margin-bottom:0.8rem">队伍：${partyStat}</div>
+      <div class="event-choice-row">
+        ${cardHtml(ev1, 0)}
+        <div class="choice-divider">或</div>
+        ${cardHtml(ev2, 1)}
+      </div>
+    </div>
+  `);
+  renderAll();
+  renderLog();
+}
+
+function pickEvent(event) {
+  window._choiceEvents = null;
+  adv.commitEvent(event);
+  renderAll();
+
   if (event.loot) {
     showLootPhase(event);
   } else if (event.recruit) {
     showRecruitPhase(event);
-  } else if (event.checks && event.checks.length > 0) {
-    showEventIntro(event);
   } else {
-    // pure text event
     showEventIntro(event);
   }
 }
@@ -413,116 +445,86 @@ function handleRecruit(yes) {
   showConsumePhase();
 }
 
-// ── Phase: Wound Roll ─────────────────────────────────────────
-function showWoundRollPhase() {
-  adv.phase = PHASE.WOUND_ROLL;
-  const injured = adv.injuredAdventurers();
-
-  if (!injured.length) {
-    showConsumePhase2();
-    return;
-  }
-
-  setMain(`
-    <div class="phase-box">
-      <div class="phase-title">伤势检定</div>
-      <div class="phase-body">
-        <p>受伤的队员需要进行伤势检定。</p>
-        <div id="wound-results"></div>
-      </div>
-      <div class="phase-actions">
-        <button class="btn-primary" onclick="doWoundRolls()">检定</button>
-      </div>
-    </div>
-  `);
-}
-
-function doWoundRolls() {
-  const results = adv.woundRolls();
-  const container = document.getElementById('wound-results');
-  if (container) {
-    container.innerHTML = results.map(r => {
-      const cls = r.outcome === 'recover' ? 'success'
-        : (r.outcome === 'dead') ? 'failure'
-        : r.outcome === 'worsen' ? 'failure'
-        : 'neutral';
-      const lastWords = r.outcome === 'dead' && adv.adventurers.find(a => a.name === r.name)?.last_words;
-      return `<div class="wound-result ${cls}">
-        【${r.name}】掷${r.roll} → ${r.msg}
-        ${lastWords ? `<div class="last-words">「${lastWords}」</div>` : ''}
-      </div>`;
-    }).join('');
-  }
-  renderAll();
-  renderLog();
-
-  document.querySelector('.phase-actions').innerHTML =
-    `<button class="btn-primary" onclick="showConsumePhase2()">继续 →</button>`;
-
-  if (adv.phase === PHASE.BAD_END) {
-    document.querySelector('.phase-actions').innerHTML =
-      `<button class="btn-danger" onclick="showBadEnd()">…</button>`;
-  }
-}
-
-// ── Phase: Consume ────────────────────────────────────────────
+// ── Phase: Consume (unified, calls endOfDay internally) ───────
 function showConsumePhase() {
-  // first do wound rolls
-  showWoundRollPhase();
+  showConsumePhase2();
 }
 
 function showConsumePhase2() {
   adv.phase = PHASE.CONSUME;
-  const deaths = adv.dailyConsume();
 
-  const deathHtml = deaths.length ? `
-    <div class="starvation-deaths">
-      ${deaths.map(a => `
-        <div class="wound-result failure">
-          【${a.name}】体力耗尽，倒下了
-          ${a.last_words ? `<div class="last-words">「${a.last_words}」</div>` : ''}
-        </div>
-      `).join('')}
-    </div>
-  ` : '';
-
+  const { log: dayLog, starvationDeaths, woundResults } = adv.endOfDay();
   const zhiResult = adv.zhiSkillTrigger();
   renderAll();
 
-  // collect evening speeches from alive members
-  const speeches = [];
-  for (const a of adv.aliveAdventurers()) {
-    const line = getEveningSpeech(a);
-    if (line) speeches.push({ name: a.name, line, injured: a.isInjured() });
-  }
-  // shuffle and take up to 4
-  speeches.sort(() => Math.random() - 0.5);
-  const shown = speeches.slice(0, 4);
+  const foodLines = dayLog.filter(l => l.type === 'food');
+  const drugLines = dayLog.filter(l => l.type === 'drug');
+
+  const foodHtml = foodLines.length
+    ? `<div class="auto-log"><span class="auto-log-title">进食</span>${foodLines.map(l=>`<span>${l.name}+${l.heal}</span>`).join('')}</div>`
+    : `<div class="auto-log auto-log-warn"><span class="auto-log-title">进食</span>干粮不足，有人未能进食</div>`;
+
+  const drugHtml = drugLines.length
+    ? `<div class="auto-log"><span class="auto-log-title">医疗</span>${drugLines.map(l=>`<span>${l.name} 伤${l.oldInjury}→${l.newInjury}</span>`).join('')}</div>`
+    : '';
 
   const zhiHtml = zhiResult
     ? `<div class="skill-notice">◆ 黹：「${zhiResult.speech}」采集到 ${zhiResult.qty} 份草药</div>`
     : '';
 
+  const deathHtml = starvationDeaths.length ? `
+    <div class="starvation-deaths">
+      ${starvationDeaths.map(a=>`
+        <div class="wound-result failure">
+          【${a.name}】体力耗尽，倒下了
+          ${a.last_words?`<div class="last-words">「${a.last_words}」</div>`:''}
+        </div>
+      `).join('')}
+    </div>` : '';
+
+  const woundHtml = woundResults.length ? `
+    <div class="wound-section">
+      <div class="wound-section-title">伤势检定</div>
+      ${woundResults.map(r => {
+        const cls = r.outcome==='recover' ? 'success'
+          : (r.outcome==='dead'||r.outcome==='worsen') ? 'failure' : 'neutral';
+        const deadChar = adv.adventurers.find(a=>a.name===r.name);
+        const lw = r.outcome==='dead' && deadChar?.last_words;
+        return `<div class="wound-result ${cls}">
+          【${r.name}】${r.roll!=='-'?'掷'+r.roll+' → ':''}${r.msg}
+          ${lw?`<div class="last-words">「${lw}」</div>`:''}
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  const speeches = [];
+  for (const a of adv.aliveAdventurers()) {
+    const line = getEveningSpeech(a);
+    if (line) speeches.push({ name:a.name, line, injured:a.isInjured() });
+  }
+  speeches.sort(()=>Math.random()-0.5);
+  const shown = speeches.slice(0,4);
   const speechHtml = shown.length ? `
     <div class="evening-speeches">
-      ${shown.map(s => `
-        <div class="speech-entry ${s.injured ? 'speech-injured' : ''}">
+      ${shown.map(s=>`
+        <div class="speech-entry ${s.injured?'speech-injured':''}">
           <span class="speech-name">${s.name}</span>
           <span class="speech-line">「${s.line}」</span>
         </div>
       `).join('')}
-    </div>
-  ` : '';
+    </div>` : '';
 
   setMain(`
     <div class="phase-box">
       <div class="phase-title">日暮</div>
       <div class="phase-body">
-        <p>奔波一日，每人消耗1点体力。可在右侧物资栏手动使用干粮和草药。</p>
+        ${foodHtml}
+        ${drugHtml}
         ${zhiHtml}
-        <p>干粮剩余：<strong>${adv.getFood()}</strong>　存活：${adv.aliveAdventurers().length} 人</p>
+        <p style="margin-top:0.6rem">干粮：<strong>${adv.getFood()}</strong>　草药：<strong>${adv.items.find(i=>i.isDrug())?.quantity||0}</strong>　存活：${adv.aliveAdventurers().length}</p>
       </div>
       ${deathHtml}
+      ${woundHtml}
       ${speechHtml}
       <div class="phase-actions">
         <button class="btn-primary" onclick="endDay()">次日 →</button>
@@ -530,6 +532,10 @@ function showConsumePhase2() {
     </div>
   `);
   renderLog();
+  if (adv.phase === PHASE.BAD_END) {
+    document.querySelector('.phase-actions').innerHTML =
+      `<button class="btn-danger" onclick="showBadEnd()">…</button>`;
+  }
 }
 
 function endDay() {
