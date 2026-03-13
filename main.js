@@ -65,6 +65,13 @@ function renderParty() {
       ? `<div class="char-injury">伤 ${a.injury}/${a.sta}</div>`
       : '';
 
+    const yongActive = adv.adventurers.find(ad => ad.name === '雍' && ad.isActive());
+    const actionButtons = yongActive ? `
+      <div class="char-actions">
+        ${adv.getFood() > 0 && a.hp < hpMax ? `<button class="btn-small" onclick="handleFeed(${a.id})">喂饭</button>` : ''}
+        ${adv.items.some(i => i.isDrug() && i.quantity > 0) && a.injury > 0 ? `<button class="btn-small" onclick="handleHeal(${a.id})">治疗</button>` : ''}
+      </div>` : '';
+
     card.innerHTML = `
       <div class="char-top-row">
         <span class="char-name">${statusLabel}${a.name}</span>
@@ -76,6 +83,7 @@ function renderParty() {
       </div>
       ${attrs ? `<div class="char-attrs">${attrs}</div>` : ''}
       ${a.skill ? `<div class="char-skill">◆ ${a.skill}</div>` : ''}
+      ${actionButtons}
     `;
     ui.partyPanel.appendChild(card);
   }
@@ -175,18 +183,21 @@ function startDay() {
 function showEventChoice(ev1, ev2) {
   adv.phase = PHASE.EVENT_INTRO;
   const partyStat = `武力 ${adv.getPartyStat('str')}　智力 ${adv.getPartyStat('int')}`;
+  const zhenActive = adv.adventurers.find(ad => ad.name === '贞' && ad.isActive());
 
   function cardHtml(ev, idx) {
-    const checkLabels = (ev.checks||[]).map(c =>
-      `<span class="choice-check-label">${c.label}</span>`
-    ).join('');
-    const tag = ev.loot ? '【物资】' : ev.recruit ? '【遭遇】' : ev.checks?.length ? '' : '【无检定】';
+    const divination = zhenActive ? `
+      <div class="choice-divination">
+        <div class="choice-hexagram">卦：${ev.hexagram}</div>
+        <div class="choice-hint">${ev.hint}</div>
+        <div class="choice-terrain">地形：${ev.terrain}</div>
+      </div>` : `
+      <div class="choice-divination">
+        <div class="choice-terrain">地形：${['密林','山野','丛林','山坡','山道','营地','雾林','河边','路边'][Math.floor(Math.random()*9)]}</div>
+      </div>`;
     return `
       <div class="event-choice-card" onclick="pickEvent(window._choiceEvents[${idx}])">
-        <div class="choice-tag">${tag}</div>
-        <div class="choice-event-name">◈ ${ev.name}</div>
-        <div class="choice-event-intro">${ev.intro}</div>
-        ${checkLabels ? `<div class="choice-checks">${checkLabels}</div>` : ''}
+        ${divination}
         <button class="btn-choice">选择此事件 →</button>
       </div>`;
   }
@@ -601,6 +612,24 @@ function handleDropItem(id) {
   adv.dropItem(id);
   renderAll();
   renderLog();
+}
+
+function handleFeed(adventurerId) {
+  const res = adv.feedAdventurer(adventurerId);
+  renderAll();
+  renderLog();
+  if (!res.ok) {
+    showToast(res.msg);
+  }
+}
+
+function handleHeal(adventurerId) {
+  const res = adv.healAdventurer(adventurerId);
+  renderAll();
+  renderLog();
+  if (!res.ok) {
+    showToast(res.msg);
+  }
 }
 
 function showToast(msg) {

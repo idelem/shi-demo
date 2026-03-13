@@ -757,6 +757,30 @@ aside {
   flex: 1;
 }
 
+.choice-divination {
+  font-size: 0.7rem;
+  color: var(--text3);
+  background: rgba(74,62,42,0.1);
+  border: 1px solid rgba(74,62,42,0.2);
+  border-radius: 2px;
+  padding: 0.4rem;
+  margin: 0.2rem 0;
+}
+
+.choice-hexagram {
+  color: var(--bronze2);
+  font-weight: 600;
+}
+
+.choice-hint {
+  color: var(--jade2);
+  font-style: italic;
+}
+
+.choice-terrain {
+  color: var(--text);
+}
+
 .choice-checks {
   display: flex;
   flex-wrap: wrap;

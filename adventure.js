@@ -211,32 +211,17 @@ class Adventure {
     }
 
     if (item.isDrug()) {
-      // drug reduces injury by 1 (priority), then heals hp
+      // drug reduces injury by 1, only treats injury, not HP
       const injured = this.adventurers.filter(a => a.isAlive() && a.injury > 0);
-      const needHp  = this.adventurers.filter(a => a.isAlive() && a.hp < a.hpMax());
-      if (!injured.length && !needHp.length) return { ok:false, msg:'无人需要治疗' };
+      if (!injured.length) return { ok:false, msg:'无人需要治疗伤势' };
 
-      let target;
-      if (injured.length) {
-        // pick most injured
-        injured.sort((a,b) => b.injury - a.injury);
-        target = injured[0];
-        target.injury = Math.max(0, target.injury - 1);
-        target.clampHp();
-        this.log.push('【医疗】' + target.name + ' 伤势减轻（injury ' + (target.injury+1) + ' → ' + target.injury + '）');
-      } else {
-        needHp.sort((a,b) => (a.hp/a.hpMax()) - (b.hp/b.hpMax()));
-        target = needHp[0];
-      }
-
-      const hp_heal = item.props['hp回复量'] || 0;
-      if (hp_heal > 0) {
-        const heal = Math.min(hp_heal, target.hpMax() - target.hp);
-        if (heal > 0) {
-          target.hp += heal;
-          this.log.push('【医疗】' + target.name + ' 恢复 ' + heal + ' 体力');
-        }
-      }
+      // pick most injured
+      injured.sort((a,b) => b.injury - a.injury);
+      const target = injured[0];
+      const oldInjury = target.injury;
+      target.injury = Math.max(0, target.injury - 1);
+      target.clampHp();
+      this.log.push('【医疗】' + target.name + ' 伤势减轻（injury ' + oldInjury + ' → ' + target.injury + '）');
       item.quantity--;
       if (item.quantity <= 0) this.items = this.items.filter(i => i.id !== itemId);
       return { ok:true, msg: target.name + ' 得到治疗' };
@@ -248,6 +233,36 @@ class Adventure {
   dropItem(itemId) {
     this.items = this.items.filter(i => i.id !== itemId);
     this.log.push('【物资】丢弃了一件物品');
+  }
+
+  feedAdventurer(adventurerId) {
+    const a = this.adventurers.find(ad => ad.id === adventurerId);
+    if (!a || !a.isAlive() || a.hp >= a.hpMax()) return { ok:false, msg:'该角色不需要进食' };
+    const food = this.items.find(i => i.isFood());
+    if (!food || food.quantity <= 0) return { ok:false, msg:'没有干粮' };
+    const hp_per = food.props['hp回复量'] || 1;
+    const heal = Math.min(hp_per, a.hpMax() - a.hp);
+    a.hp += heal;
+    food.quantity--;
+    if (food.quantity <= 0) this.items = this.items.filter(i => !i.isFood());
+    this.log.push('【物资】' + a.name + ' 进食，恢复 ' + heal + ' 体力');
+    return { ok:true, msg: a.name + ' 恢复 ' + heal + ' 体力' };
+  }
+
+  healAdventurer(adventurerId) {
+    const a = this.adventurers.find(ad => ad.id === adventurerId);
+    if (!a || !a.isAlive()) return { ok:false, msg:'该角色无法治疗' };
+    if (a.injury <= 0) return { ok:false, msg:'该角色没有伤势' };
+    const drug = this.items.find(i => i.isDrug() && i.quantity > 0);
+    if (!drug) return { ok:false, msg:'没有药草' };
+
+    const oldInjury = a.injury;
+    a.injury = Math.max(0, a.injury - 1);
+    a.clampHp();
+    this.log.push('【医疗】' + a.name + ' 伤势减轻（injury ' + oldInjury + ' → ' + a.injury + '）');
+    drug.quantity--;
+    if (drug.quantity <= 0) this.items = this.items.filter(i => i.id !== drug.id);
+    return { ok:true, msg: a.name + ' 得到治疗' };
   }
 
   // ── End-of-day resolution (auto eat → auto drug → consume → wound rolls) ─
@@ -270,11 +285,12 @@ class Adventure {
       if (needEaters.length === 0) break;
 
       // Weighted random selection: higher priority (earlier in sorted list) has higher weight
-      const totalWeight = needEaters.reduce((sum, _, i) => sum + (needEaters.length - i), 0);
+      const weights = needEaters.map((a, i) => (needEaters.length - i) * (a.skill === '吃饭能力较强' ? 5 : 1));
+      const totalWeight = weights.reduce((sum, w) => sum + w, 0);
       let rand = Math.random() * totalWeight;
       let selected = null;
       for (let i = 0; i < needEaters.length; i++) {
-        rand -= (needEaters.length - i);
+        rand -= weights[i];
         if (rand <= 0) {
           selected = needEaters[i];
           break;
@@ -413,7 +429,7 @@ class Adventure {
 
     const cook = this.harosCorpseCook();
     if (cook && cook.id !== adventurer.id) {
-      const food_gain = Math.floor(adventurer.sta / 1);
+      const food_gain = Math.floor(adventurer.sta / 2) + 1;
       this.modFood(food_gain);
       this.log.push('【陶范】又多了' + food_gain + '份……浪费不得。');
     }
@@ -636,12 +652,12 @@ function getEveningSpeech(adventurer) {
 // ============================================================
 
 const DEMO_ADVENTURERS = [
-  { id:0,  name:'贞',  sta:3 },
+  { id:0,  name:'贞',  sta:3, skill:'上帝的旨意' },
   { id:1,  name:'目',  sta:3, int:3 },
   { id:2,  name:'朝',  sta:3 },
-  { id:3,  name:'丽',  sta:3 },
+  { id:3,  name:'丽',  sta:3, skill:'吃饭能力较强' },
   { id:4,  name:'钺',  sta:4, str:3 },
-  { id:5,  name:'雍',  sta:4, str:2, int:2 },
+  { id:5,  name:'雍',  sta:4, str:2, int:2, skill:'自我管理能力' },
   { id:6,  name:'幽',  sta:3, str:3 },
   { id:7,  name:'七',  sta:3 },
   { id:8,  name:'冶',  sta:4, str:1 },
@@ -669,6 +685,7 @@ const DEMO_ITEMS = [
 const DEMO_EVENTS = [
   {
     id:'ambush', name:'伏击', repeatable:true,
+    hexagram:'师', hint:'军队来袭，需谨慎应对', terrain:'密林',
     intro:'林中突然杀出一队盗匪，为首者手持铜钺，眼神凶狠。队伍被前后夹击，无处可退。',
     checks:[{
       label:'武力对决', stat:'str', difficulty:16,
@@ -687,6 +704,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'beast', name:'猛兽出没', repeatable:true,
+    hexagram:'噬嗑', hint:'野兽噬咬，需以力制服', terrain:'山野',
     intro:'夜营时，营地边缘传来沉重的喘息声。篝火映出一双黄色的眼睛——是饥饿的豺狼，不止一头。',
     checks:[{
       label:'驱兽（武）', stat:'str', difficulty:14,
@@ -704,6 +722,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'hunt', name:'狩猎', repeatable:true,
+    hexagram:'比', hint:'比邻相亲，狩猎可得', terrain:'丛林',
     intro:'发现了野猪的踪迹，蹄印新鲜，数量不少。若能猎获，可解燃眉之急。',
     checks:[
       {
@@ -724,6 +743,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'forage', name:'采集野果', repeatable:true,
+    hexagram:'豫', hint:'豫乐有喜，采集需谨慎', terrain:'山坡',
     intro:'路旁山坡上长着大片不知名的浆果，颜色鲜艳，不知是否可食。',
     checks:[{
       label:'辨别毒性（智）', stat:'int', difficulty:9,
@@ -739,6 +759,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'mudslide', name:'山体滑坡', repeatable:false,
+    hexagram:'剥', hint:'剥落崩坏，山崩地裂', terrain:'山道',
     intro:'连日阴雨，山道突然传来轰鸣，泥石俱下，前路被堵死。',
     checks:[{
       label:'强行开路（武）', stat:'str', difficulty:18,
@@ -754,6 +775,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'plague', name:'疫病蔓延', repeatable:false,
+    hexagram:'复', hint:'复归本源，疫病复发', terrain:'营地',
     intro:'夜里有人突发高热，口吐黑水，营地中弥漫着腐败的气息。到早晨，已有几人神色不对。',
     checks:[{
       label:'隔离处置（智）', stat:'int', difficulty:12,
@@ -769,6 +791,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'lost', name:'迷路', repeatable:true,
+    hexagram:'困', hint:'困于迷途，需智解困', terrain:'雾林',
     intro:'雾气弥漫，向导也辨不清方向，队伍在山间转了大半天，原地打转。',
     checks:[{
       label:'辨别方向（智）', stat:'int', difficulty:11,
@@ -784,6 +807,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'river_crossing', name:'渡河', repeatable:false,
+    hexagram:'解', hint:'解开困境，渡河成功', terrain:'河边',
     intro:'前方一条湍急的河流拦住去路。水面宽阔，水色浑浊，看不清深浅，河边没有舟筏。',
     checks:[{
       label:'强渡（武）', stat:'str', difficulty:17,
@@ -799,6 +823,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'night_raid', name:'夜袭营地', repeatable:true,
+    hexagram:'坎', hint:'坎险在前，夜袭危机', terrain:'营地',
     intro:'夜深人静，哨兵突然大喊——黑暗中不知多少人影正在逼近，是有备而来的袭击。',
     checks:[{
       label:'抵御夜袭（武）', stat:'str', difficulty:18,
@@ -814,6 +839,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'find_missing', name:'搜寻失踪者', repeatable:false,
+    hexagram:'离', hint:'离散复聚，寻找失踪', terrain:'密林',
     intro:'有人提议停下来找找失踪的同伴，说不定还没走远。',
     checks:[{
       label:'搜寻（智）', stat:'int', difficulty:9,
@@ -826,6 +852,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'found_dead', name:'发现遗体', repeatable:false,
+    hexagram:'震', hint:'震动惊悚，发现尸体', terrain:'路边',
     intro:'有人在路边发现了一具尸体，认出是失踪的同伴。',
     checks:[],
     intro_effects:[{ type:'char_status', target:'missing', status:STATUS.DEAD, count:1 }],
@@ -833,6 +860,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'merchant', name:'行商', repeatable:false,
+    hexagram:'巽', hint:'巽顺相随，商人同行', terrain:'山道',
     intro:'山道上遇到一支落魄的商队，车轮陷在泥里，他们愿意以物资换取帮助。',
     checks:[{
       label:'帮助商队脱困（武）', stat:'str', difficulty:12,
@@ -849,6 +877,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'abandoned_camp', name:'废弃营地', repeatable:false,
+    hexagram:'艮', hint:'艮止不动，废弃营地', terrain:'营地',
     intro:'发现了一处废弃的营地，灰烬还温，有人匆忙离去的痕迹，遗留了一些物资。',
     checks:[],
     loot:[
@@ -860,6 +889,7 @@ const DEMO_EVENTS = [
   },
   {
     id:'slave', name:'遗民', repeatable:false,
+    hexagram:'兑', hint:'兑悦相遇，遗民相助', terrain:'路旁',
     intro:'路旁蜷缩着一个年轻人，衣衫褴褛，但身形结实。他抬起头，眼神里有一丝希望。',
     checks:[],
     recruit:{ id:100, name:'奴隶', sta:2, str:1 },
