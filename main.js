@@ -189,20 +189,21 @@ function showEventChoice(ev1, ev2) {
     const checkLabels = (ev.checks||[]).map(c =>
       `<span class="choice-check-label">${c.label}</span>`
     ).join('');
+    const checksHtml = checkLabels ? `<div class="choice-checks">${checkLabels}</div>` : '';
     const divination = zhenActive ? `
       <div class="choice-divination">
         <div class="choice-hexagram">卦：${ev.hexagram}</div>
         <div class="choice-hint">${ev.hint}</div>
         <div class="choice-terrain">地形：${ev.terrain}</div>
+        ${checksHtml}
       </div>` : `
       <div class="choice-divination">
         <div class="choice-terrain">地形：${['密林','山野','丛林','山坡','山道','营地','雾林','河边','路边'][Math.floor(Math.random()*9)]}</div>
       </div>`;
-    const checksHtml = checkLabels ? `<div class="choice-checks">${checkLabels}</div>` : '';
+    
     return `
       <div class="event-choice-card" onclick="pickEvent(window._choiceEvents[${idx}])">
         ${divination}
-        ${checksHtml}
         <button class="btn-choice">选择此事件 →</button>
       </div>`;
   }
@@ -534,6 +535,24 @@ function showConsumePhase2() {
       `).join('')}
     </div>` : '';
 
+  const reactions = [];
+  for (const a of adv.aliveAdventurers()) {
+    const line = getReactionSpeech(a);
+    if (line) reactions.push({ name:a.name, line });
+  }
+  reactions.sort(()=>Math.random()-0.5);
+  const shownReactions = reactions.slice(0,3);
+  const reactionHtml = shownReactions.length ? `
+    <div class="event-reactions">
+      <div class="reactions-title">事件评价</div>
+      ${shownReactions.map(r=>`
+        <div class="reaction-entry">
+          <span class="reaction-name">${r.name}</span>
+          <span class="reaction-line">「${r.line}」</span>
+        </div>
+      `).join('')}
+    </div>` : '';
+
   setMain(`
     <div class="phase-box">
       <div class="phase-title">日暮</div>
@@ -545,6 +564,7 @@ function showConsumePhase2() {
       </div>
       ${deathHtml}
       ${woundHtml}
+      ${reactionHtml}
       ${speechHtml}
       <div class="phase-actions">
         <button class="btn-primary" onclick="endDay()">次日 →</button>

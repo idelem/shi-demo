@@ -486,6 +486,11 @@ class Adventure {
           messages.push('干粮 ' + (eff.delta > 0 ? '+' : '') + eff.delta);
         }
 
+      } else if (eff.type === 'advance_day') {
+        this.day += eff.delta || 1;
+        messages.push('抄近道，天数提前 ' + (eff.delta || 1) + ' 日');
+        this.log.push('【捷径】天数提前 ' + (eff.delta || 1) + ' 日');
+
       } else if (eff.type === 'char_injury') {
         // {type:'char_injury', target:'random_active'|'all_active', delta:1, count:1}
         const pool = eff.target === 'all_active'
@@ -643,6 +648,42 @@ const EVENING_SPEECHES = {
 
 function getEveningSpeech(adventurer) {
   const lines = EVENING_SPEECHES[adventurer.id];
+  if (!lines) return null;
+  return lines[Math.floor(Math.random() * lines.length)];
+}
+
+// ============================================================
+// REACTION SPEECHES
+// ============================================================
+
+const REACTION_SPEECHES = {
+  0:  ['这卦象……果然如此。', '天意难测，但我们做到了。', '星辰指引，我们走对了路。'],
+  1:  ['眼睛看到了，但心还没明白。', '这事……有点意思。', '下次小心点。'],
+  2:  ['路还长，经验多了。', '这次运气好。', '记住了。'],
+  3:  ['我感觉到了什么……', '这味道不对，但过去了。', '下次别再这样。'],
+  4:  ['打得不错！', '敌人太弱了。', '下次再来。'],
+  5:  ['资源消耗可控。', '计划有变，但还好。', '统筹得当。'],
+  6:  ['我还活着。', '……', '这次差点。'],
+  7:  ['累了，但坚持住了。', '差点跟不上。', '休息一下。'],
+  8:  ['这活真他妈难干。', '凑合过去了。', '下次别遇上了。'],
+  9:  ['草药的气息告诉我，危机过去了。', '自然有它的道理。', '我们学到了。'],
+  10: ['啾……', '……', '（蜷缩着）'],
+  11: ['就这样吧。', '没什么好说的。', '继续走。'],
+  12: ['这肉……可惜了。', '下次小心处理。', '浪费不得。'],
+  13: ['差点就完了。', '这伤口疼。', '记住了教训。'],
+  20: ['战术调整成功。', '损失在可接受范围内。', '继续执行。'],
+  21: ['右边安全了。', '这次走对了。', '坚持路线。'],
+  22: ['左边没事。', '……', '继续前进。'],
+  23: ['险情解除。', '不退缩是对的。', '下次更谨慎。'],
+  24: ['终于过去了。', '……快到了吧。', '腿还行。'],
+  25: ['我错了……', '下次不说错话。', '抱歉。'],
+  26: ['伤口还在，但活下来了。', '疼，但值得。', '撑过去了。'],
+  27: ['动起来就好。', '差点倒下。', '继续。'],
+  100:['我帮上忙了……', '我扛住了。', '别抛下我。'],
+};
+
+function getReactionSpeech(adventurer) {
+  const lines = REACTION_SPEECHES[adventurer.id];
   if (!lines) return null;
   return lines[Math.floor(Math.random() * lines.length)];
 }
@@ -1068,7 +1109,7 @@ const DEMO_EVENTS = [
     failure_text:'没有余粮可分，双方对峙了一会儿，最终流民散去，留下一地沉默。',
     success_effects:[
       { type:'party_stat', stat:'food', delta:-3 },
-      { type:'char_hp', target:'all_alive', delta:1 },
+      { type:'advance_day', delta:1 },
     ],
     failure_effects:[],
   }],

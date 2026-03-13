@@ -856,6 +856,46 @@ aside {
   font-style: italic;
 }
 
+/* ── Event reactions ───────────────────────────────────────── */
+.event-reactions {
+  margin: 0.8rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+.reactions-title {
+  font-family: var(--font-display);
+  color: var(--jade2);
+  font-size: 0.9rem;
+  margin-bottom: 0.3rem;
+  text-align: center;
+}
+
+.reaction-entry {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  font-size: 0.83rem;
+  line-height: 1.6;
+}
+
+.reaction-name {
+  font-family: var(--font-display);
+  color: var(--bronze);
+  min-width: 2.5rem;
+  flex-shrink: 0;
+  font-size: 0.88rem;
+}
+
+.reaction-line {
+  color: var(--text2);
+}
+
 /* ── Last words ────────────────────────────────────────────── */
 .last-words {
   margin-top: 0.3rem;
