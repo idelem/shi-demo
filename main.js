@@ -66,7 +66,7 @@ function renderParty() {
       : '';
 
     const yongActive = adv.adventurers.find(ad => ad.name === '雍' && ad.isActive());
-    const actionButtons = yongActive ? `
+    const actionButtons = yongActive && a.name !== '雍' ? `
       <div class="char-actions">
         ${adv.getFood() > 0 && a.hp < hpMax ? `<button class="btn-small" onclick="handleFeed(${a.id})">喂饭</button>` : ''}
         ${adv.items.some(i => i.isDrug() && i.quantity > 0) && a.injury > 0 ? `<button class="btn-small" onclick="handleHeal(${a.id})">治疗</button>` : ''}
@@ -186,6 +186,9 @@ function showEventChoice(ev1, ev2) {
   const zhenActive = adv.adventurers.find(ad => ad.name === '贞' && ad.isActive());
 
   function cardHtml(ev, idx) {
+    const checkLabels = (ev.checks||[]).map(c =>
+      `<span class="choice-check-label">${c.label}</span>`
+    ).join('');
     const divination = zhenActive ? `
       <div class="choice-divination">
         <div class="choice-hexagram">卦：${ev.hexagram}</div>
@@ -195,9 +198,11 @@ function showEventChoice(ev1, ev2) {
       <div class="choice-divination">
         <div class="choice-terrain">地形：${['密林','山野','丛林','山坡','山道','营地','雾林','河边','路边'][Math.floor(Math.random()*9)]}</div>
       </div>`;
+    const checksHtml = checkLabels ? `<div class="choice-checks">${checkLabels}</div>` : '';
     return `
       <div class="event-choice-card" onclick="pickEvent(window._choiceEvents[${idx}])">
         ${divination}
+        ${checksHtml}
         <button class="btn-choice">选择此事件 →</button>
       </div>`;
   }
@@ -222,6 +227,10 @@ function showEventChoice(ev1, ev2) {
 function pickEvent(event) {
   window._choiceEvents = null;
   adv.commitEvent(event);
+  if (adv.phase === PHASE.BAD_END) {
+    showBadEnd();
+    return;
+  }
   renderAll();
 
   if (event.loot) {
@@ -642,4 +651,25 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ── Phase: Bad End ──────────────────────────────────────────
+function showBadEnd() {
+  setMain(`
+    <div class="phase-box">
+      <div class="phase-title">全军覆没</div>
+      <div class="phase-body">
+        <p>队伍中的所有成员都已阵亡。冒险以失败告终。</p>
+        <p>遗言：</p>
+        <ul>
+          ${adv.adventurers.filter(a => a.last_words).map(a => `<li><strong>${a.name}：</strong>"${a.last_words}"</li>`).join('')}
+        </ul>
+      </div>
+      <div class="phase-actions">
+        <button class="btn-primary" onclick="location.reload()">重新开始 →</button>
+      </div>
+    </div>
+  `);
+  renderAll();
+  renderLog();
 }

@@ -429,7 +429,7 @@ class Adventure {
 
     const cook = this.harosCorpseCook();
     if (cook && cook.id !== adventurer.id) {
-      const food_gain = Math.floor(adventurer.sta / 2) + 1;
+      const food_gain = Math.floor(adventurer.sta / 2);
       this.modFood(food_gain);
       this.log.push('【陶范】又多了' + food_gain + '份……浪费不得。');
     }
@@ -673,7 +673,7 @@ const DEMO_ADVENTURERS = [
   { id:24, name:'登',  sta:3, int:1 },
   { id:25, name:'舌',  sta:3, int:1 },
   { id:26, name:'阮',  sta:3, injury:1 },
-  { id:27, name:'未',  sta:3, injury:1 },
+  { id:27, name:'未',  sta:3, str:3, injury:1 },
 ];
 
 const DEMO_ITEMS = [
@@ -768,7 +768,7 @@ const DEMO_EVENTS = [
       success_effects:[],
       failure_effects:[
         { type:'party_stat', stat:'food', delta:-6 },
-        { type:'char_hp', target:'all_alive', delta:-1 },
+        { type:'char_hp', target:'random_active', delta:-1, count:5 },
       ],
     }],
     conditions:{},
@@ -783,7 +783,7 @@ const DEMO_EVENTS = [
       failure_text:'处置迟缓，疫病在队伍中迅速扩散，人人自危。',
       success_effects:[],
       failure_effects:[
-        { type:'char_hp', target:'all_alive', delta:-2 },
+        { type:'char_hp', target:'random_active', delta:-2, count:5 },
         { type:'char_injury', target:'random_active', delta:1, count:2 },
       ],
     }],
@@ -797,9 +797,9 @@ const DEMO_EVENTS = [
       label:'辨别方向（智）', stat:'int', difficulty:11,
       success_text:'终于找到了参照物，重新确认方向，虽然耗费时间，但没有更大损失。',
       failure_text:'越走越深，有人在混乱中与大队失散。',
-      success_effects:[{ type:'char_hp', target:'all_alive', delta:-1 }],
+      success_effects:[{ type:'char_hp', target:'random_active', delta:-1, count:5 }],
       failure_effects:[
-        { type:'char_hp', target:'all_alive', delta:-1 },
+        { type:'char_hp', target:'random_active', delta:-1, count:5 },
         { type:'char_status', target:'random_active', status:STATUS.MISSING, count:1 },
       ],
     }],
@@ -895,6 +895,488 @@ const DEMO_EVENTS = [
     recruit:{ id:100, name:'奴隶', sta:2, str:1 },
     conditions:{},
   },
+  {
+  id:'cliff_path', name:'险道', repeatable:true,
+  hexagram:'艮', hint:'艮止险路，慎行可过', terrain:'山道',
+  intro:'前方山道狭窄，一侧是峭壁，一侧是深谷。脚下碎石滚落，稍有不慎便是万丈深渊。',
+  checks:[{
+    label:'稳步通过（武）', stat:'str', difficulty:13,
+    success_text:'众人贴壁缓行，互相搀扶，终于通过了险道。',
+    failure_text:'有人脚下一滑，连带着旁边的人跌倒，虽没有坠崖，但摔伤了几人。',
+    success_effects:[],
+    failure_effects:[
+      { type:'char_injury', target:'random_active', delta:1, count:1 },
+      { type:'char_hp', target:'all_alive', delta:-1 },
+    ],
+  }],
+  conditions:{},
+},
+{
+  id:'flash_flood', name:'山洪', repeatable:false,
+  hexagram:'坎', hint:'坎水暴至，险象环生', terrain:'山谷',
+  intro:'上游传来轰鸣，还没反应过来，泥黄的洪水已经漫过小腿。谷地里无处可逃，只能往高处跑。',
+  checks:[
+    {
+      label:'抢先登高（武）', stat:'str', difficulty:15,
+      success_text:'众人拼力奔跑，全员爬上了高坡，俯看洪水卷走了低处的东西。',
+      failure_text:'来不及，洪水漫上来，有人被冲倒，物资大量流失。',
+      success_effects:[{ type:'party_stat', stat:'food', delta:-2 }],
+      failure_effects:[
+        { type:'party_stat', stat:'food', delta:-6 },
+        { type:'char_hp', target:'all_alive', delta:-2 },
+      ],
+      fail_ends_event:true,
+    },
+    {
+      label:'清点物资（智）', stat:'int', difficulty:9,
+      success_text:'在乱中仍有人记挂着物资，抢回了一些。',
+      failure_text:'慌乱之中，什么也没来得及救。',
+      success_effects:[{ type:'party_stat', stat:'food', delta:3 }],
+      failure_effects:[],
+    },
+  ],
+  conditions:{},
+},
+{
+  id:'wildfire', name:'山火', repeatable:false,
+  hexagram:'离', hint:'离火炎上，焚林阻路', terrain:'林地',
+  intro:'前方树冠突然腾起烟柱，风一吹，火舌迅速蔓延。林子里浓烟滚滚，方向已经辨不清了。',
+  checks:[
+    {
+      label:'辨风向逃离（智）', stat:'int', difficulty:11,
+      success_text:'有人判出了风向，队伍绕过火头，从侧翼突出重围。',
+      failure_text:'判断失误，跑进了烟最浓的地方，众人呛咳不止，险些晕倒。',
+      success_effects:[],
+      failure_effects:[
+        { type:'char_hp', target:'random_active', delta:-2, count:5 },
+      ],
+      fail_ends_event:true,
+    },
+    {
+      label:'冲出火线（武）', stat:'str', difficulty:14,
+      success_text:'众人咬牙冲过火线，虽然烧焦了衣物，人总算出来了。',
+      failure_text:'冲势不足，被烧伤了几人。',
+      success_effects:[],
+      failure_effects:[
+        { type:'char_injury', target:'random_active', delta:1, count:2 },
+      ],
+    },
+  ],
+  conditions:{},
+},
+{
+  id:'quarrel', name:'内讧', repeatable:true,
+  hexagram:'睽', hint:'睽违离散，内生矛盾', terrain:'营地',
+  intro:'连日疲行，积压的怒火终于爆发。两人在营地里起了冲突，眼看就要动手，其余人面面相觑。',
+  checks:[{
+    label:'居中调停（智）', stat:'int', difficulty:10,
+    success_text:'说开了，各退一步。夜里气氛还是沉，但没有人再说话了。',
+    failure_text:'没人压得住，打了起来，两人都挂了彩，士气跌到谷底。',
+    success_effects:[],
+    failure_effects:[
+      { type:'char_hp', target:'random_active', delta:-2 },
+      { type:'char_hp', target:'random_active', delta:-2 },
+    ],
+  }],
+  conditions:{},
+},
+{
+  id:'desertion', name:'有人想离队', repeatable:false,
+  hexagram:'遁', hint:'遁逃之心，难以强留', terrain:'营地',
+  intro:'清晨点名，有人没有出现。找到时，他正收拾行囊，说不想再走了，想回头。',
+  checks:[{
+    label:'劝说留下（智）', stat:'int', difficulty:11,
+    success_text:'说了很久。他沉默了一会儿，最终还是把包放下了。',
+    failure_text:'没能留住。他一个人往来路走去，没有回头。',
+    success_effects:[],
+    failure_effects:[
+      { type:'char_status', target:'random_active', status:STATUS.MISSING, count:1 },
+    ],
+  }],
+  conditions:{ min_day:3 },
+},
+{
+  id:'ill_omen', name:'不祥之兆', repeatable:true,
+  hexagram:'蛊', hint:'蛊惑人心，谣言乱队', terrain:'营地',
+  intro:'有人夜里听见了怪声，说是前方有厉鬼拦路。消息传开，队伍里开始有人不肯上路。',
+  checks:[
+    {
+      label:'查明原委（智）', stat:'int', difficulty:9,
+      success_text:'仔细勘察，是林间野物的叫声。虽然如此，仍有人半信半疑。',
+      failure_text:'查不清楚，谣言越传越烈，人心惶惶。',
+      success_effects:[],
+      failure_effects:[
+        { type:'char_hp', target:'random_active', delta:-1, count:5 },
+      ],
+      fail_ends_event:true,
+    },
+    {
+      label:'激励士气（武）', stat:'str', difficulty:10,
+      success_text:'有人当众斥退怯懦，队伍重新振作，继续上路。',
+      failure_text:'话说得太狠，反而激起了反弹，当天走得很慢。',
+      success_effects:[],
+      failure_effects:[
+        { type:'char_hp', target:'random_active', delta:-1, count:5 },
+      ],
+    },
+  ],
+  conditions:{ min_day:2 },
+},
+{
+  id:'find_spring', name:'发现山泉', repeatable:true,
+  hexagram:'井', hint:'井养不穷，甘泉相助', terrain:'山地',
+  intro:'有人发现了一处山泉，水色清亮，苔藓碧绿。是这几日难得见到的清洁水源。',
+  checks:[{
+    label:'检视水质（智）', stat:'int', difficulty:7,
+    success_text:'确认水质无虞，众人饱饮，精神为之一振。',
+    failure_text:'没能判断清楚，喝了之后有几人腹痛。',
+    success_effects:[{ type:'char_hp', target:'all_alive', delta:1 }],
+    failure_effects:[{ type:'char_hp', target:'random_active', delta:-2 }],
+  }],
+  conditions:{},
+},
+{
+  id:'ruins', name:'殷人遗址', repeatable:false,
+  hexagram:'观', hint:'观察遗迹，往事如烟', terrain:'废墟',
+  intro:'荒草丛中露出几根断柱，刻着已经模糊的纹样。这里曾经住过人，是很久以前的事了。',
+  checks:[
+    {
+      label:'仔细搜寻（智）', stat:'int', difficulty:10,
+      success_text:'在废墟角落翻出了一个陶罐，里面还封存着干货。',
+      failure_text:'翻了半天，只有破陶片和腐朽的木料，什么也没有。',
+      success_effects:[{ type:'party_stat', stat:'food', delta:4 }],
+      failure_effects:[],
+      fail_ends_event:true,
+    },
+    {
+      label:'辨认铭文（智）', stat:'int', difficulty:12,
+      success_text:'有人认出了部分字迹——是路引，指向前方还有一条隐路，可以少走两日。',
+      failure_text:'字迹太模糊，认不出来。',
+      success_effects:[{ type:'party_stat', stat:'food', delta:-4 }],  // 省了两日消耗折算
+      failure_effects:[],
+    },
+  ],
+  conditions:{},
+},
+{
+  id:'refugee_group', name:'流民', repeatable:false,
+  hexagram:'旅', hint:'旅途相逢，同是流离', terrain:'山道',
+  intro:'前方遇到一群流民，老弱居多，面黄肌瘦。他们盯着队伍的干粮袋，眼神里有乞求，也有警惕。',
+  checks:[{
+    label:'施以援手（智）', stat:'int', difficulty:8,
+    success_text:'分出了一些干粮。流民中有人感激，主动带路，少走了不少弯路。',
+    failure_text:'没有余粮可分，双方对峙了一会儿，最终流民散去，留下一地沉默。',
+    success_effects:[
+      { type:'party_stat', stat:'food', delta:-3 },
+      { type:'char_hp', target:'all_alive', delta:1 },
+    ],
+    failure_effects:[],
+  }],
+  conditions:{},
+},
+{
+  id:'abandoned_child', name:'弃婴', repeatable:false,
+  hexagram:'蒙', hint:'蒙稚初生，何去何从', terrain:'路旁',
+  intro:'路旁草丛里传来微弱的哭声。是个孩子，裹着破布，脸上还有泪痕，不知被遗弃多久了。',
+  checks:[{
+    label:'决断去留（智）', stat:'int', difficulty:9,
+    success_text:'有人主动抱起了孩子，说走到下一个有人烟的地方再做打算。队伍的脚步慢了一些，但没有人反对。',
+    failure_text:'众人争执太久，最终不得不放弃。走出很远，哭声还在身后。有人一整天没有说话。',
+    success_effects:[
+      { type:'party_stat', stat:'food', delta:-1 },
+    ],
+    failure_effects:[
+      { type:'char_hp', target:'all_alive', delta:-1 },
+    ],
+  }],
+  conditions:{},
+},
+{
+  id:'strange_dream', name:'异梦', repeatable:true,
+  hexagram:'颐', hint:'颐养正道，梦兆吉凶', terrain:'营地',
+  intro:'数人同夜做了相近的梦：一条大河，对岸站着认识的人，但怎么也渡不过去。醒来之后，没有人先开口。',
+  checks:[{
+    label:'解读梦兆（智）', stat:'int', difficulty:8,
+    success_text:'有人说，梦见渡不过去，是说前路有阻，但终能过去。众人沉默，也算接受了这个说法。',
+    failure_text:'无人能解，有人越想越不安，一整天心神不宁。',
+    success_effects:[],
+    failure_effects:[{ type:'char_hp', target:'all_alive', delta:-1 }],
+  }],
+  conditions:{},
+},
+{
+  id:'oracle_bone', name:'卜骨', repeatable:false,
+  hexagram:'大有', hint:'大有所得，问卜于天', terrain:'营地',
+  intro:'贞取出一片兽骨，以火灼之。裂纹蜿蜒，有几条走向不好看。',
+  checks:[{
+    label:'据兆备险（智）', stat:'int', difficulty:10,
+    success_text:'众人依兆行事，提前做了防备，当天遇到的麻烦比预想中少了许多。',
+    failure_text:'有人不信，照常行事，到了傍晚才明白那兆是什么意思。',
+    success_effects:[],
+    failure_effects:[
+      { type:'char_hp', target:'all_alive', delta:-1 },
+      { type:'party_stat', stat:'food', delta:-2 },
+    ],
+  }],
+  conditions:{},
+},{
+  id:'river_fish', name:'捕鱼', repeatable:true,
+  hexagram:'需', hint:'需待时机，守水得鱼', terrain:'河边',
+  intro:'路过一条浅河，水清见底，有鱼影游动。若能捕到，是难得的荤腥。',
+  checks:[
+    {
+      label:'编网设陷（智）', stat:'int', difficulty:9,
+      success_text:'用衣料编了个简陋的网，设在水流收窄处。',
+      failure_text:'网没编好，鱼群受惊四散。',
+      success_effects:[], failure_effects:[], fail_ends_event:true,
+    },
+    {
+      label:'收网起鱼（武）', stat:'str', difficulty:11,
+      success_text:'一网下去，捞起了不少。众人就地烤鱼，难得吃了顿热食。',
+      failure_text:'鱼太滑，大半漏网，只捞到几条小的。',
+      success_effects:[{ type:'party_stat', stat:'food', delta:5 }],
+      failure_effects:[{ type:'party_stat', stat:'food', delta:1 }],
+    },
+  ],
+  conditions:{},
+},
+{
+  id:'trapped_beast', name:'陷阱', repeatable:true,
+  hexagram:'屯', hint:'屯积待时，设陷猎兽', terrain:'林地',
+  intro:'有人发现了自己昨日设下的陷阱——里面压着一头小鹿，还没有断气。',
+  checks:[
+    {
+      label:'制服猎物（武）', stat:'str', difficulty:10,
+      success_text:'干净利落地解决了，没让它受太多苦。',
+      failure_text:'小鹿挣脱了，带着伤跑进林子里，什么也没得到。',
+      success_effects:[], failure_effects:[], fail_ends_event:true,
+    },
+    {
+      label:'处理皮肉（智）', stat:'int', difficulty:8,
+      success_text:'熟练地剥皮分肉，一点没有浪费。兽皮也留着，或许有用。',
+      failure_text:'手法生疏，糟蹋了不少好肉。',
+      success_effects:[
+        { type:'party_stat', stat:'food', delta:5 },
+        { type:'add_item', item:{ id:'hide', name:'兽皮', quantity:1, weight:2, consumable:false, sta:1 } },
+      ],
+      failure_effects:[{ type:'party_stat', stat:'food', delta:2 }],
+    },
+  ],
+  conditions:{},
+},
+{
+  id:'hostile_tribe', name:'异族斥候', repeatable:false,
+  hexagram:'师', hint:'师出有名，御敌于外', terrain:'山道',
+  intro:'山道转角，迎面撞上几个装束陌生的斥候。双方都愣了一下，然后他们摘下了弓。',
+  checks:[
+    {
+      label:'强行突破（武）', stat:'str', difficulty:15,
+      success_text:'抢先发力，将斥候逼退。趁乱跑出了他们的视线。',
+      failure_text:'没能压制，陷入对峙，双方都有人受伤。',
+      success_effects:[], 
+      failure_effects:[
+        { type:'char_injury', target:'random_active', delta:1, count:1 },
+      ],
+    },
+    {
+      label:'甩脱追踪（智）', stat:'int', difficulty:12,
+      success_text:'绕进密林，几番折返，彻底甩掉了追踪。',
+      failure_text:'没能甩掉，对方一路跟了很久，队伍疲于奔命。',
+      success_effects:[],
+      failure_effects:[
+        { type:'char_hp', target:'random_active', delta:-1, count:6 },
+        { type:'party_stat', stat:'food', delta:-3 },
+      ],
+    },
+  ],
+  conditions:{ min_day:3 },
+},
+{
+  id:'collapsed_bridge', name:'断桥', repeatable:false,
+  hexagram:'未济', hint:'未济难渡，智力可通', terrain:'山涧',
+  intro:'前方一座木桥已经朽烂，桥板塌了大半，下面是湍急的山涧。绕路要多走两天。',
+  checks:[
+    {
+      label:'评估风险（智）', stat:'int', difficulty:9,
+      success_text:'仔细检查了还能承重的位置，规划出一条走法。',
+      failure_text:'判断失误，走到一半桥板突然断裂。',
+      success_effects:[],
+      failure_effects:[
+        { type:'char_injury', target:'random_active', delta:1, count:1 },
+        { type:'party_stat', stat:'food', delta:-2 },
+      ],
+      fail_ends_event:true,
+    },
+    {
+      label:'加固桥身（武）', stat:'str', difficulty:13,
+      success_text:'砍来木料，临时加固了最危险的几段，队伍小心翼翼全员通过。',
+      failure_text:'木料不够，只能逐人通过，耗费了大量时间，当天粮食消耗翻倍。',
+      success_effects:[],
+      failure_effects:[{ type:'party_stat', stat:'food', delta:-4 }],
+    },
+  ],
+  conditions:{},
+},
+{
+  id:'wolves_circle', name:'狼群围营', repeatable:true,
+  hexagram:'坎', hint:'坎险连至，群狼环伺', terrain:'荒野',
+  intro:'半夜，营地四周出现了点点绿光。狼群无声地包围过来，篝火还没有熄，但它们没有离开的意思。',
+  checks:[
+    {
+      label:'守住火线（武）', stat:'str', difficulty:13,
+      success_text:'举火呐喊，轮流驱赶，熬到天亮，狼群终于散去。',
+      failure_text:'火势减弱，狼群开始试探性地冲进来，有人被咬伤。',
+      success_effects:[{ type:'char_hp', target:'all_alive', delta:-1 }],
+      failure_effects:[
+        { type:'char_injury', target:'random_active', delta:1, count:1 },
+        { type:'char_hp', target:'all_alive', delta:-1 },
+      ],
+      fail_ends_event:true,
+    },
+    {
+      label:'击杀头狼（武）', stat:'str', difficulty:16,
+      success_text:'有人瞄准了最大的那头，一击命中。群狼随即溃散，还留下了一头死狼。',
+      failure_text:'没有打中，狼群受惊后四散，但什么也没得到。',
+      success_effects:[{ type:'party_stat', stat:'food', delta:3 }],
+      failure_effects:[],
+    },
+  ],
+  conditions:{ min_day:2 },
+},
+{
+  id:'foraging_roots', name:'掘根', repeatable:true,
+  hexagram:'颐', hint:'颐养其身，掘根果腹', terrain:'林地',
+  intro:'粮食告急，有人建议挖掘林间的根茎充饥。这需要认路，也需要气力。',
+  checks:[
+    {
+      label:'辨认可食根茎（智）', stat:'int', difficulty:10,
+      success_text:'认出了几种可食的品种，标记出位置，让人去挖。',
+      failure_text:'认不准，为了安全只能放弃大部分，白费了力气。',
+      success_effects:[], failure_effects:[], fail_ends_event:true,
+    },
+    {
+      label:'大量挖掘（武）', stat:'str', difficulty:12,
+      success_text:'挖了整整半天，弄到了不少。根茎粗糙，但能填肚子。',
+      failure_text:'土层太硬，挖到的不多，只够一两顿。',
+      success_effects:[{ type:'party_stat', stat:'food', delta:6 }],
+      failure_effects:[{ type:'party_stat', stat:'food', delta:2 }],
+    },
+  ],
+  conditions:{},
+},
+{
+  id:'old_soldier', name:'老卒', repeatable:false,
+  hexagram:'既济', hint:'既济功成，老卒告退', terrain:'山道',
+  intro:'路边坐着一个老人，腿上有旧伤，走不动了。他自称是溃败的兵，熟悉这一带的路。',
+  checks:[
+    {
+      label:'甄别真伪（智）', stat:'int', difficulty:10,
+      success_text:'细问之下，他确实说出了几处官道不知道的捷径，应该是真的。',
+      failure_text:'问了半天，说法前后矛盾，不知真假，只能带着一肚子疑惑上路。',
+      success_effects:[], failure_effects:[], fail_ends_event:true,
+    },
+    {
+      label:'按捷径行进（智）', stat:'int', difficulty:9,
+      success_text:'捷径确实存在，节省了不少脚程，还意外发现了一处避风的营地遗址。',
+      failure_text:'捷径走到一半断了，只能折回，白耗了半天。',
+      success_effects:[
+        { type:'party_stat', stat:'food', delta:-2 },
+        { type:'add_item', item:{ id:'shortcut_herb', name:'草药', quantity:3, weight:1, consumable:true, isdrug:true, 'hp回复量':1 } },
+      ],
+      failure_effects:[
+        { type:'party_stat', stat:'food', delta:-3 },
+        { type:'char_hp', target:'all_alive', delta:-1 },
+      ],
+    },
+  ],
+  conditions:{},
+},
+{
+  id:'night_burial', name:'夜葬', repeatable:false,
+  hexagram:'震', hint:'震动生敬，葬者安魂', terrain:'营地',
+  intro:'有人提议，既然队伍里已经有人死了，应该在夜里做个简单的仪式，不能就这么走了。争执了很久，最终还是停下来。',
+  checks:[
+    {
+      label:'主持仪式（智）', stat:'int', difficulty:8,
+      success_text:'成功主持了仪式。',
+      failure_text:'没有人知道该说什么，最后潦草收场。',
+      success_effects:[{ type:'char_hp', target:'all_alive', delta:1 }],
+      failure_effects:[{ type:'char_hp', target:'all_alive', delta:-1 }],
+      fail_ends_event:true,
+    },
+    {
+      label:'整理遗物（智）', stat:'int', difficulty:7,
+      success_text:'遗物分发给各人保管。有人从中找到了一些还能用的东西。',
+      failure_text:'遗物引发了争执，到底该谁拿，吵了很久没有结论。',
+      success_effects:[{ type:'party_stat', stat:'food', delta:1 }],
+      failure_effects:[{ type:'char_hp', target:'all_alive', delta:-1 }],
+    },
+  ],
+  conditions:{ require_dead:true },
+},
+{
+  id:'fog_morning', name:'晨雾', repeatable:true,
+  hexagram:'蒙', hint:'蒙昧如雾，静待天明', terrain:'山地',
+  intro:'清晨起来，四周全是白茫茫的雾。能见度不足三步，什么也看不见。众人坐在原地等了两个时辰，雾才慢慢散开。耽误了半天，但没有人受伤。',
+  checks:[], intro_effects:[{ type:'party_stat', stat:'food', delta:-1 }],
+  conditions:{},
+},
+{
+  id:'rainbow', name:'虹', repeatable:true,
+  hexagram:'泰', hint:'泰通顺畅，虹现吉兆', terrain:'山地',
+  intro:'雨后，东方天际出现了一道完整的长虹，横跨两座山头。队伍停下来看了很久，没有人说话。这是这几天来见到的最好看的东西了。',
+  checks:[], intro_effects:[],
+  conditions:{},
+},
+{
+  id:'silent_night', name:'无声之夜', repeatable:true,
+  hexagram:'坤', hint:'坤静承载，万籁俱寂', terrain:'荒野',
+  intro:'今夜异常安静。没有虫鸣，没有风声，连营地的火焰都烧得特别安稳。没有人解释得了，也没有人提起。早上起来，每个人都说睡得不好。',
+  checks:[], intro_effects:[],
+  conditions:{},
+},
+{
+  id:'old_road_sign', name:'路碑', repeatable:false,
+  hexagram:'晋', hint:'晋升前行，路碑指途', terrain:'山道',
+  intro:'路边立着一块半截入土的石碑，刻着地名，但那个地方已经没有人知道在哪里了。碑上有人用炭笔写了新字：「此路不通」，字迹很新。',
+  checks:[], intro_effects:[{ type:'party_stat', stat:'food', delta:-1 }],
+  conditions:{},
+},
+{
+  id:'mass_grave', name:'乱葬岗', repeatable:false,
+  hexagram:'否', hint:'否闭不通，死者无名', terrain:'荒野',
+  intro:'走进一片开阔地，才发现脚下踩的是松软的土，四周立着无数歪斜的木桩，没有名字。有人认出来，这是埋人的地方，不知道死的是什么人，死了多少。队伍绕道而行，没有人回头看。',
+  checks:[], intro_effects:[],
+  conditions:{},
+},
+{
+  id:'first_snow', name:'初雪', repeatable:false,
+  hexagram:'剥', hint:'剥落归根，初雪覆路', terrain:'山地',
+  intro:'夜里下了第一场雪。不大，但早晨起来地上已经白了。脚印踩进去，发出细碎的声音。有人说，下了雪就难走了。另一个人说，下了雪就干净了。',
+  checks:[], intro_effects:[{ type:'char_hp', target:'all_alive', delta:-1 }],
+  conditions:{ min_day:5 },
+},
+{
+  id:'bones_on_road', name:'路上的骸骨', repeatable:true,
+  hexagram:'旅', hint:'旅途流离，白骨在野', terrain:'山道',
+  intro:'路中间躺着几具骸骨，衣物早已腐烂，只剩骨头和一些零散的碎片。没有人知道他们是谁，也没有人停下来。只有走在最后的一个人悄悄回头看了一眼。',
+  checks:[], intro_effects:[],
+  conditions:{},
+},
+{
+  id:'fireflies', name:'萤火', repeatable:true,
+  hexagram:'丰', hint:'丰盛光明，萤火照夜', terrain:'林地',
+  intro:'天黑后营地边的草丛里亮起了星星点点的光。是萤火虫，很多。有人伸手，一只落在指尖停了一会儿，然后飞走了。这是今天唯一让人觉得好的事。',
+  checks:[], intro_effects:[],
+  conditions:{},
+},
+{
+  id:'sick_horse', name:'倒毙的马', repeatable:false,
+  hexagram:'困', hint:'困于疲竭，马先倒毙', terrain:'山道',
+  intro:'路边有一匹马，已经死了，倒在泥里，不知道死了多久。马鞍还在，但骑手不见了。陶范在旁边站了很久，最终还是动手了。',
+  checks:[], intro_effects:[{ type:'party_stat', stat:'food', delta:4 }],
+  conditions:{},
+},
 ];
 
 function createDemoAdventure() {
