@@ -254,7 +254,7 @@ class Adventure {
   endOfDay() {
     const log = [];
 
-    // 1. Auto-eat: sort alive by (str+sta) descending, feed until food runs out
+    // 1. Auto-eat: sort alive by (str+sta) descending, feed with weighted random selection
     const eaters = this.adventurers
       .filter(a => a.isAlive() && a.hp < a.hpMax())
       .sort((a, b) => {
@@ -263,17 +263,32 @@ class Adventure {
         return scoreB - scoreA;
       });
 
-    for (const a of eaters) {
+    while (true) {
       const food = this.items.find(i => i.isFood());
       if (!food || food.quantity <= 0) break;
+      const needEaters = eaters.filter(a => a.hp < a.hpMax());
+      if (needEaters.length === 0) break;
+
+      // Weighted random selection: higher priority (earlier in sorted list) has higher weight
+      const totalWeight = needEaters.reduce((sum, _, i) => sum + (needEaters.length - i), 0);
+      let rand = Math.random() * totalWeight;
+      let selected = null;
+      for (let i = 0; i < needEaters.length; i++) {
+        rand -= (needEaters.length - i);
+        if (rand <= 0) {
+          selected = needEaters[i];
+          break;
+        }
+      }
+
       const hp_per = food.props['hp回复量'] || 1;
-      const heal = Math.min(hp_per, a.hpMax() - a.hp);
+      const heal = Math.min(hp_per, selected.hpMax() - selected.hp);
       if (heal > 0) {
-        a.hp += heal;
+        selected.hp += heal;
         food.quantity--;
         if (food.quantity <= 0) this.items = this.items.filter(i => !i.isFood());
-        log.push({ type:'food', name: a.name, heal });
-        this.log.push('【进食】' + a.name + ' 进食，恢复 ' + heal + ' 体力');
+        log.push({ type:'food', name: selected.name, heal });
+        this.log.push('【进食】' + selected.name + ' 进食，恢复 ' + heal + ' 体力');
       }
     }
 
@@ -398,7 +413,7 @@ class Adventure {
 
     const cook = this.harosCorpseCook();
     if (cook && cook.id !== adventurer.id) {
-      const food_gain = Math.floor(adventurer.sta / 2);
+      const food_gain = Math.floor(adventurer.sta / 1);
       this.modFood(food_gain);
       this.log.push('【陶范】又多了' + food_gain + '份……浪费不得。');
     }
@@ -410,7 +425,7 @@ class Adventure {
 
   // ── 黹 skill ─────────────────────────────────────────────────
   zhiSkillTrigger() {
-    const zhi = this.adventurers.find(a => a.isActive() && a.skill === '随机恢复1人1hp');
+    const zhi = this.adventurers.find(a => a.isActive() && a.skill === '随机采摘1-2草药');
     if (!zhi) return null;
     if (Math.random() > 0.4) return null;
     const qty = Math.floor(Math.random() * 2) + 1;
@@ -630,7 +645,7 @@ const DEMO_ADVENTURERS = [
   { id:6,  name:'幽',  sta:3, str:3 },
   { id:7,  name:'七',  sta:3 },
   { id:8,  name:'冶',  sta:4, str:1 },
-  { id:9,  name:'黹',  sta:3, int:2, skill:'随机恢复1人1hp' },
+  { id:9,  name:'黹',  sta:3, int:2, skill:'随机采摘1-2草药' },
   { id:10, name:'玄鸟',sta:2 },
   { id:11, name:'旬',  sta:3 },
   { id:12, name:'陶范',sta:4, str:1, skill:'能把尸体做成干粮' },
@@ -661,6 +676,7 @@ const DEMO_EVENTS = [
       failure_text:'抵挡不住，队伍被迫分散突围，狼狈撤退。',
       success_effects:[
         { type:'add_item', item:{ id:'loot_bronze', name:'青铜短刀', quantity:1, weight:2, consumable:false, str:1 } },
+        { type:'party_stat', stat:'food', delta:+6 },
       ],
       failure_effects:[
         { type:'char_injury', target:'random_active', delta:1, count:2 },
@@ -674,9 +690,11 @@ const DEMO_EVENTS = [
     intro:'夜营时，营地边缘传来沉重的喘息声。篝火映出一双黄色的眼睛——是饥饿的豺狼，不止一头。',
     checks:[{
       label:'驱兽（武）', stat:'str', difficulty:14,
-      success_text:'举火呐喊，兽群被驱散，只留下一地爪印。',
+      success_text:'举火呐喊，兽群被驱散，只留下一地爪印，和几只受伤的野兽',
       failure_text:'豺狼冲入营地，撕咬人员，抢走了食物。',
-      success_effects:[],
+      success_effects:[
+        { type:'party_stat', stat:'food', delta:4 },
+      ],
       failure_effects:[
         { type:'char_injury', target:'random_active', delta:1, count:1 },
         { type:'party_stat', stat:'food', delta:-4 },
