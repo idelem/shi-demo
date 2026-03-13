@@ -285,7 +285,7 @@ class Adventure {
       if (needEaters.length === 0) break;
 
       // Weighted random selection: higher priority (earlier in sorted list) has higher weight
-      const weights = needEaters.map((a, i) => (needEaters.length - i) * (a.skill === '吃饭能力较强' ? 5 : 1));
+      const weights = needEaters.map((a, i) => (needEaters.length - i) + (a.skill === '吃饭能力较强' ? 5 : 0) + (a.skill === '上帝的旨意' ? -1 : 0));
       const totalWeight = weights.reduce((sum, w) => sum + w, 0);
       let rand = Math.random() * totalWeight;
       let selected = null;
