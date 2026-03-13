@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>野外冒险 · Demo</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header id="header">
+    <div id="header-left">
+      <span class="header-title">野外冒险</span>
+      <span id="day-counter">第 0 / 7 日</span>
+    </div>
+    <div id="header-right">
+      <span id="food-display">干粮 0</span>
+      <span id="weight-display">负重 0/0</span>
+    </div>
+  </header>
+
+  <!-- Layout -->
+  <div id="layout">
+
+    <!-- Left: Party -->
+    <aside id="party-sidebar">
+      <div class="sidebar-title">队伍</div>
+      <div id="party-panel"></div>
+    </aside>
+
+    <!-- Center: Main -->
+    <main id="main-area">
+      <div class="phase-box">
+        <div class="phase-title">载入中…</div>
+      </div>
+    </main>
+
+    <!-- Right: Items + Log -->
+    <aside id="right-sidebar">
+      <div class="sidebar-title">物资</div>
+      <div id="items-panel"></div>
+      <div class="sidebar-title" style="margin-top:1rem">日志</div>
+      <div id="log-panel">
+        <div id="log-list"></div>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<script src="adventure.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
